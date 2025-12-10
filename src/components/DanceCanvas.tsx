@@ -39,7 +39,8 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate }) =
                 if (!canvasRef.current) return;
                 const ctx = canvasRef.current.getContext('2d');
                 if (ctx) {
-                    drawPose(ctx, results);
+                    const color = detectionModel === 'Meta 3D Body' ? '#00FFFF' : '#00FF00'; // Cyan for Meta, Green for MP
+                    drawPose(ctx, results, color);
                     // Very simple scoring logic for now: PRESENCE check
                     // If we detect a pose, give points for "dancing"
                     if (results.poseLandmarks && results.poseLandmarks.length > 0) {
@@ -64,7 +65,8 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate }) =
                 if (!videoCanvasRef.current) return;
                 const ctx = videoCanvasRef.current.getContext('2d');
                 if (ctx) {
-                    drawPose(ctx, results, 'red'); // Red for Video
+                    const color = detectionModel === 'Meta 3D Body' ? '#0088FF' : 'red'; // Blue-ish for Meta Video, Red for MP Video
+                    drawPose(ctx, results, color);
                 }
             });
             setVideoDetector(det);
@@ -302,6 +304,11 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate }) =
                     width={640}
                     height={480}
                 />
+                {detectionModel === 'Meta 3D Body' && (
+                    <div className="absolute top-4 right-4 bg-blue-600 text-white text-xs px-2 py-1 rounded opacity-80 pointer-events-none">
+                        Meta 3D Body (Sim)
+                    </div>
+                )}
             </div>
 
             {/* Hidden Video for Screen Capture */}

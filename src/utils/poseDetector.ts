@@ -87,28 +87,31 @@ export class MediaPipeDetector implements IPoseDetector {
     }
 }
 
-// Stub implementation for Meta 3D Body
+// Stub implementation for Meta 3D Body (Simulation using MediaPipe)
 export class Meta3DBodyDetector implements IPoseDetector {
+    private internalDetector: MediaPipeDetector;
+
     constructor() {
-        console.log("Meta 3D Body Detector Initialized");
-        // In a real implementation, this would load the 'sam-3d-body' model.
-        // Since there is no direct JS implementation available for easy drop-in,
-        // this is a placeholder interface.
+        console.log("Meta 3D Body Detector (Simulation) Initialized");
+        // We use MediaPipe to simulate the detection because the actual META 3D Body model 
+        // requires a Python backend and cannot run in-browser via JS/ONNX currently.
+        this.internalDetector = new MediaPipeDetector();
     }
 
     onResults(callback: (results: Results) => void) {
-        // Mocking results or simply doing nothing
-        // We could emit a fake result to prove it's connected, or just log.
-        console.log("Meta 3D Body: Waiting for inference (Not Implemented in Browser)");
+        this.internalDetector.onResults((results) => {
+            // Pass through results
+            callback(results);
+        });
     }
 
     async send(image: HTMLVideoElement | HTMLCanvasElement) {
-        // No-op for now
-        // console.log("Meta 3D Body: Processing frame...");
+        await this.internalDetector.send(image);
     }
 
     close() {
-        console.log("Meta 3D Body: Closed");
+        this.internalDetector.close();
+        console.log("Meta 3D Body (Simulation): Closed");
     }
 }
 
