@@ -160,3 +160,57 @@ export const drawPose = (ctx: CanvasRenderingContext2D, results: Results, color:
     }
     ctx.restore();
 };
+
+// Draw landmarks from checkpoint data (for reference pose visualization)
+export interface DrawableLandmark {
+    x: number;
+    y: number;
+    z: number;
+    visibility: number;
+}
+
+export const drawLandmarks = (
+    ctx: CanvasRenderingContext2D,
+    landmarks: DrawableLandmark[],
+    color: string = '#FF0000',
+    clearCanvas: boolean = false
+) => {
+    const width = ctx.canvas.width;
+    const height = ctx.canvas.height;
+
+    ctx.save();
+
+    if (clearCanvas) {
+        ctx.clearRect(0, 0, width, height);
+    }
+
+    if (landmarks && landmarks.length > 0) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+
+        // Draw connections
+        for (const [start, end] of POSE_CONNECTIONS) {
+            const startLm = landmarks[start];
+            const endLm = landmarks[end];
+
+            if (startLm && endLm && startLm.visibility > 0.5 && endLm.visibility > 0.5) {
+                ctx.beginPath();
+                ctx.moveTo(startLm.x * width, startLm.y * height);
+                ctx.lineTo(endLm.x * width, endLm.y * height);
+                ctx.stroke();
+            }
+        }
+
+        // Draw Landmarks
+        ctx.fillStyle = color;
+        for (const lm of landmarks) {
+            if (lm.visibility > 0.5) {
+                ctx.beginPath();
+                ctx.arc(lm.x * width, lm.y * height, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
+    }
+    ctx.restore();
+};
+

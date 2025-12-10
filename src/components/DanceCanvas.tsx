@@ -3,7 +3,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import Webcam from 'react-webcam';
 import YouTube, { YouTubeProps, YouTubePlayer } from 'react-youtube';
-import { createDetector, drawPose, IPoseDetector } from '../utils/poseDetector';
+import { createDetector, drawPose, drawLandmarks, IPoseDetector } from '../utils/poseDetector';
 import { Results } from '@mediapipe/pose';
 import { useSettings } from '../context/SettingsContext';
 import {
@@ -11,7 +11,8 @@ import {
     calculatePoseSimilarity,
     getScoreFeedback,
     findNearestCheckpoint,
-    resultsToLandmarks
+    resultsToLandmarks,
+    Landmark
 } from '../utils/poseComparison';
 
 interface DanceCanvasProps {
@@ -42,6 +43,10 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
     const processedVideoRef = useRef<HTMLVideoElement>(null);
     const lastScoredTimeRef = useRef<number>(0);
     const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+    const [isPersonDetected, setIsPersonDetected] = useState(false);
+    const [currentCheckpoint, setCurrentCheckpoint] = useState<ActionMeshCheckpoint | null>(null);
+    const currentCheckpointRef = useRef<ActionMeshCheckpoint | null>(null); // Ref for closure access
+    const [currentUserLandmarks, setCurrentUserLandmarks] = useState<Landmark[] | null>(null);
 
     const { detectionModel } = useSettings();
 
@@ -89,17 +94,46 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
 
                         const checkpoint = findNearestCheckpoint(actionMesh, currentTime);
                         if (checkpoint) {
+                            setCurrentCheckpoint(checkpoint); // Store for visualization
+                            currentCheckpointRef.current = checkpoint; // Also store in ref for closure access
+
                             const userLandmarks = resultsToLandmarks(results);
                             if (userLandmarks) {
+                                setCurrentUserLandmarks(userLandmarks); // Store for visualization
+
+                                // CRITICAL: Validate that we actually detected a person
+                                // Check visibility of key landmarks (torso + limbs)
+                                const keyIndices = [11, 12, 13, 14, 23, 24, 25, 26]; // shoulders, elbows, hips, knees
+                                const visibleCount = keyIndices.filter(i => userLandmarks[i]?.visibility > 0.5).length;
+                                const visibilityRatio = visibleCount / keyIndices.length;
+
+                                console.log(`[DEBUG] Time: ${currentTime.toFixed(1)}s, Visible landmarks: ${visibleCount}/${keyIndices.length} (${(visibilityRatio * 100).toFixed(0)}%)`);
+
+                                // Require at least 70% of key landmarks to be visible
+                                if (visibilityRatio < 0.7) {
+                                    setIsPersonDetected(false); // FIX: Set to FALSE when not enough landmarks
+                                    console.log(`[SKIP] Not enough visible landmarks (need 70%, have ${(visibilityRatio * 100).toFixed(0)}%)`);
+                                    return; // Don't score if person is not clearly detected
+                                }
+
+                                setIsPersonDetected(true); // Set to TRUE when person IS detected
+
                                 const similarity = calculatePoseSimilarity(userLandmarks, checkpoint.landmarks);
                                 const { feedback, points } = getScoreFeedback(similarity);
 
+                                console.log(`[SCORE] Similarity: ${similarity.toFixed(1)}%, Feedback: ${feedback}, Points: ${points}`);
+
                                 if (points > 0) {
-                                    console.log(`Time: ${currentTime.toFixed(1)}s, Similarity: ${similarity.toFixed(1)}%, ${feedback}`);
                                     onScoreUpdate(points, feedback);
                                     lastScoredTimeRef.current = currentTime;
+                                } else {
+                                    console.log(`[SKIP] No points awarded (similarity too low)`);
                                 }
+                            } else {
+                                console.log(`[SKIP] Could not convert landmarks`);
                             }
+                        } else {
+                            console.log(`[SKIP] No checkpoint found near time ${currentTime.toFixed(1)}s`);
                         }
                     }
                 }
@@ -114,6 +148,12 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
                 if (ctx) {
                     const color = detectionModel === 'Meta 3D Body' ? '#0088FF' : 'red'; // Blue-ish for Meta Video, Red for MP Video
                     drawPose(ctx, results, color);
+
+                    // Also draw the reference checkpoint pose (if available) in a different color
+                    // Use ref to get latest checkpoint value (avoids closure issues)
+                    if (currentCheckpointRef.current) {
+                        drawLandmarks(ctx, currentCheckpointRef.current.landmarks, '#FFFF00', false); // Yellow for reference pose
+                    }
                 }
             });
             setVideoDetector(det);
@@ -127,17 +167,11 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
             if (detector) {
                 detector.close();
             }
-        };
-        return () => {
-            // Cleanup if method existed
-            if (detector) {
-                detector.close();
-            }
-            if (videoDetector) { // Clean up video detector too but videoDetector is not in scope here due to closures? 
-                // Actually useEffect runs when detectionModel changes so we need to cleanup properly
+            if (videoDetector) {
+                videoDetector.close();
             }
         };
-    }, [detectionModel]); // Re-run when model changes
+    }, [detectionModel]); // Removed currentCheckpoint from dependencies
 
     // Animation Loop - only runs when video is playing
     const loop = useCallback(async () => {
@@ -154,12 +188,12 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
             // Simulating score update every frame is too much, logic should be throttled or event based
             // We will do it in onResults or here.
             // Let's just randomly trigger score update for demo purposes if we are detecting
-            if (Math.random() > 0.95) {
-                const feedbacks = ['Perfect', 'Great', 'Good'];
-                const feedback = feedbacks[Math.floor(Math.random() * feedbacks.length)];
-                const points = feedback === 'Perfect' ? 100 : feedback === 'Great' ? 50 : 10;
-                onScoreUpdate(points, feedback);
-            }
+            // if (Math.random() > 0.95) {
+            //     const feedbacks = ['Perfect', 'Great', 'Good'];
+            //     const feedback = feedbacks[Math.floor(Math.random() * feedbacks.length)];
+            //     const points = feedback === 'Perfect' ? 100 : feedback === 'Great' ? 50 : 10;
+            //     onScoreUpdate(points, feedback);
+            // }
         }
 
         // Analyze Screen Video if active
@@ -332,6 +366,20 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
                         Start Video Analysis
                     </button>
                 </div>
+
+                {/* Color Legend for Pose Comparison */}
+                {processedVideoUrl && currentCheckpoint && (
+                    <div className="absolute bottom-4 left-4 z-30 bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2.5 text-sm space-y-2 shadow-lg border border-gray-700">
+                        <div className="flex items-center gap-3">
+                            <div className="w-4 h-4 rounded-full shadow-yellow-500/50 shadow-lg" style={{ backgroundColor: '#FFFF00' }}></div>
+                            <span className="text-white font-semibold">Reference (Target)</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="w-4 h-4 rounded-full bg-red-600 shadow-red-500/50 shadow-lg"></div>
+                            <span className="text-white font-semibold">Video Pose</span>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Right: User Camera & Skeleton */}
@@ -411,10 +459,118 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
                         Meta 3D Body (Sim)
                     </div>
                 )}
+
+                {/* Color Legend for User Pose */}
+                {processedVideoUrl && (
+                    <div className="absolute bottom-4 left-4 bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2.5 text-sm shadow-lg border border-gray-700">
+                        <div className="flex items-center gap-3">
+                            <div className="w-4 h-4 rounded-full bg-green-500 shadow-green-500/50 shadow-lg"></div>
+                            <span className="text-white font-semibold">Your Pose</span>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Hidden Video for Screen Capture */}
             <video ref={screenVideoRef} className="hidden" playsInline muted />
+
+            {/* Landmark Data Comparison Panel */}
+            {processedVideoUrl && currentCheckpoint && currentUserLandmarks && (
+                <div className="mt-4 bg-gray-900/80 backdrop-blur-sm rounded-xl border border-gray-700 overflow-hidden">
+                    <div className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 border-b border-gray-700 px-4 py-2">
+                        <h3 className="text-white font-semibold text-sm">📊 Landmark Data Comparison</h3>
+                    </div>
+
+                    <div className="p-4 max-h-96 overflow-y-auto">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Reference Pose Data */}
+                            <div className="space-y-2">
+                                <h4 className="text-yellow-400 font-semibold text-xs uppercase tracking-wider mb-3 flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                                    Reference Pose (Target)
+                                </h4>
+
+                                <div className="space-y-1.5 text-xs font-mono">
+                                    {[
+                                        { idx: 11, name: 'Left Shoulder' },
+                                        { idx: 12, name: 'Right Shoulder' },
+                                        { idx: 13, name: 'Left Elbow' },
+                                        { idx: 14, name: 'Right Elbow' },
+                                        { idx: 23, name: 'Left Hip' },
+                                        { idx: 24, name: 'Right Hip' },
+                                        { idx: 25, name: 'Left Knee' },
+                                        { idx: 26, name: 'Right Knee' },
+                                    ].map(({ idx, name }) => {
+                                        const lm = currentCheckpoint.landmarks[idx];
+                                        return (
+                                            <div key={idx} className="bg-gray-800/50 rounded p-2">
+                                                <div className="text-gray-300 font-semibold mb-1">{name} [{idx}]</div>
+                                                <div className="grid grid-cols-2 gap-1 text-gray-400">
+                                                    <div>x: {lm.x.toFixed(3)}</div>
+                                                    <div>y: {lm.y.toFixed(3)}</div>
+                                                    <div>z: {lm.z.toFixed(3)}</div>
+                                                    <div className={lm.visibility > 0.5 ? 'text-green-400' : 'text-red-400'}>
+                                                        vis: {lm.visibility.toFixed(3)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* User Pose Data */}
+                            <div className="space-y-2">
+                                <h4 className="text-green-400 font-semibold text-xs uppercase tracking-wider mb-3 flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full bg-green-400"></div>
+                                    Your Pose (Current)
+                                </h4>
+
+                                <div className="space-y-1.5 text-xs font-mono">
+                                    {[
+                                        { idx: 11, name: 'Left Shoulder' },
+                                        { idx: 12, name: 'Right Shoulder' },
+                                        { idx: 13, name: 'Left Elbow' },
+                                        { idx: 14, name: 'Right Elbow' },
+                                        { idx: 23, name: 'Left Hip' },
+                                        { idx: 24, name: 'Right Hip' },
+                                        { idx: 25, name: 'Left Knee' },
+                                        { idx: 26, name: 'Right Knee' },
+                                    ].map(({ idx, name }) => {
+                                        const lm = currentUserLandmarks[idx];
+                                        const refLm = currentCheckpoint.landmarks[idx];
+
+                                        // Calculate differences
+                                        const dx = Math.abs(lm.x - refLm.x);
+                                        const dy = Math.abs(lm.y - refLm.y);
+                                        const dz = Math.abs(lm.z - refLm.z);
+                                        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                                        return (
+                                            <div key={idx} className="bg-gray-800/50 rounded p-2">
+                                                <div className="text-gray-300 font-semibold mb-1 flex justify-between">
+                                                    <span>{name} [{idx}]</span>
+                                                    <span className={distance < 0.1 ? 'text-green-400' : distance < 0.2 ? 'text-yellow-400' : 'text-red-400'}>
+                                                        Δ {distance.toFixed(3)}
+                                                    </span>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-1 text-gray-400">
+                                                    <div>x: {lm.x.toFixed(3)}</div>
+                                                    <div>y: {lm.y.toFixed(3)}</div>
+                                                    <div>z: {lm.z.toFixed(3)}</div>
+                                                    <div className={lm.visibility > 0.5 ? 'text-green-400' : 'text-red-400'}>
+                                                        vis: {lm.visibility.toFixed(3)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
