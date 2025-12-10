@@ -11,7 +11,14 @@ export const POSE_CONNECTIONS: [number, number][] = [
     [29, 31], [30, 32], [27, 31], [28, 32]
 ];
 
-export class PoseDetector {
+// Interface for all pose detectors
+export interface IPoseDetector {
+    onResults(callback: (results: Results) => void): void;
+    send(image: HTMLVideoElement | HTMLCanvasElement): Promise<void>;
+    close(): void;
+}
+
+export class MediaPipeDetector implements IPoseDetector {
     private pose: Pose | null = null;
     private scriptLoaded: boolean = false;
 
@@ -80,7 +87,39 @@ export class PoseDetector {
     }
 }
 
-// Drawing Utilities can be exported here too
+// Stub implementation for Meta 3D Body
+export class Meta3DBodyDetector implements IPoseDetector {
+    constructor() {
+        console.log("Meta 3D Body Detector Initialized");
+        // In a real implementation, this would load the 'sam-3d-body' model.
+        // Since there is no direct JS implementation available for easy drop-in,
+        // this is a placeholder interface.
+    }
+
+    onResults(callback: (results: Results) => void) {
+        // Mocking results or simply doing nothing
+        // We could emit a fake result to prove it's connected, or just log.
+        console.log("Meta 3D Body: Waiting for inference (Not Implemented in Browser)");
+    }
+
+    async send(image: HTMLVideoElement | HTMLCanvasElement) {
+        // No-op for now
+        // console.log("Meta 3D Body: Processing frame...");
+    }
+
+    close() {
+        console.log("Meta 3D Body: Closed");
+    }
+}
+
+// Factory Function
+export const createDetector = (modelName: string): IPoseDetector => {
+    if (modelName === 'Meta 3D Body') {
+        return new Meta3DBodyDetector();
+    }
+    return new MediaPipeDetector();
+};
+
 // Drawing Utilities can be exported here too
 export const drawPose = (ctx: CanvasRenderingContext2D, results: Results, color: string = '#00FF00') => {
     const width = ctx.canvas.width;
@@ -89,7 +128,7 @@ export const drawPose = (ctx: CanvasRenderingContext2D, results: Results, color:
     ctx.save();
     ctx.clearRect(0, 0, width, height);
 
-    if (results.poseLandmarks) {
+    if (results && results.poseLandmarks) {
         ctx.strokeStyle = color;
         ctx.lineWidth = 3;
 

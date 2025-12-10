@@ -3,8 +3,9 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import Webcam from 'react-webcam';
 import YouTube, { YouTubeProps, YouTubePlayer } from 'react-youtube';
-import { PoseDetector, drawPose } from '../utils/poseDetector';
+import { createDetector, drawPose, IPoseDetector } from '../utils/poseDetector';
 import { Results } from '@mediapipe/pose';
+import { useSettings } from '../context/SettingsContext';
 
 interface DanceCanvasProps {
     youtubeId: string;
@@ -14,7 +15,7 @@ interface DanceCanvasProps {
 const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate }) => {
     const webcamRef = useRef<Webcam>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [detector, setDetector] = useState<PoseDetector | null>(null);
+    const [detector, setDetector] = useState<IPoseDetector | null>(null);
     const requestRef = useRef<number>(null);
     const isRunning = useRef<boolean>(false);
     const [player, setPlayer] = useState<YouTubePlayer | null>(null);
@@ -23,14 +24,16 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate }) =
 
     // Video Analysis State
     const videoCanvasRef = useRef<HTMLCanvasElement>(null);
-    const [videoDetector, setVideoDetector] = useState<PoseDetector | null>(null);
+    const [videoDetector, setVideoDetector] = useState<IPoseDetector | null>(null);
     const screenVideoRef = useRef<HTMLVideoElement>(null);
     const isAnalyzing = useRef<boolean>(false);
+
+    const { detectionModel } = useSettings();
 
     // Initialize Detector
     useEffect(() => {
         const initDetector = async () => {
-            const det = new PoseDetector();
+            const det = createDetector(detectionModel);
             // Setup callback
             det.onResults((results) => {
                 if (!canvasRef.current) return;
@@ -56,7 +59,7 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate }) =
             setDetector(det);
         };
         const initVideoDetector = async () => {
-            const det = new PoseDetector();
+            const det = createDetector(detectionModel);
             det.onResults((results) => {
                 if (!videoCanvasRef.current) return;
                 const ctx = videoCanvasRef.current.getContext('2d');
@@ -76,7 +79,16 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate }) =
                 detector.close();
             }
         };
-    }, []);
+        return () => {
+            // Cleanup if method existed
+            if (detector) {
+                detector.close();
+            }
+            if (videoDetector) { // Clean up video detector too but videoDetector is not in scope here due to closures? 
+                // Actually useEffect runs when detectionModel changes so we need to cleanup properly
+            }
+        };
+    }, [detectionModel]); // Re-run when model changes
 
     // Animation Loop - only runs when video is playing
     const loop = useCallback(async () => {

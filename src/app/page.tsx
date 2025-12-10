@@ -57,11 +57,17 @@ export default function Home() {
           </h1>
         </div>
 
-        {youtubeId && (
-          <div className="hidden md:block">
-            <ScoreBoard score={score} feedback={feedback} />
-          </div>
-        )}
+        <div className="flex items-center gap-4">
+          {youtubeId && (
+            <div className="hidden md:block">
+              <ScoreBoard score={score} feedback={feedback} />
+            </div>
+          )}
+
+          <a href="/setting" className="p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition-colors border border-gray-700 text-xl" title="Settings">
+            ⚙️
+          </a>
+        </div>
       </header>
 
       <main className="container mx-auto p-4 md:p-8 flex flex-col items-center gap-8">
