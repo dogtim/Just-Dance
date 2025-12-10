@@ -195,7 +195,7 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate }) =
                 {/* Canvas Layer */}
                 <canvas
                     ref={canvasRef}
-                    className="absolute top-0 left-0 w-full h-full pointer-events-none"
+                    className="absolute top-0 left-0 w-full h-full pointer-events-none scale-x-[-1]"
                     width={640}
                     height={480}
                 />
