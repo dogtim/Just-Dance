@@ -10,9 +10,10 @@ import { useSettings } from '../context/SettingsContext';
 interface DanceCanvasProps {
     youtubeId: string;
     onScoreUpdate: (points: number, feedback: string) => void;
+    processedVideoUrl: string | null;
 }
 
-const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate }) => {
+const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, processedVideoUrl }) => {
     const webcamRef = useRef<Webcam>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [detector, setDetector] = useState<IPoseDetector | null>(null);
@@ -200,19 +201,45 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate }) =
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full h-[600px]">
             {/* Left: YouTube Player */}
             <div className="relative w-full h-full bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl">
-                <YouTube
-                    videoId={youtubeId}
-                    opts={{
-                        width: '100%',
-                        height: '100%',
-                        playerVars: {
-                            autoplay: 0,
-                        },
-                    }}
-                    className="w-full h-full absolute top-0 left-0"
-                    onReady={onPlayerReady}
-                    onStateChange={onPlayerStateChange}
-                />
+                {processedVideoUrl ? (
+                    <video
+                        src={processedVideoUrl}
+                        className="w-full h-full absolute top-0 left-0 object-cover"
+                        controls={false} // Custom controls or sync with game loop? For now allow autoplay loop
+                        autoPlay
+                        loop
+                        playsInline
+                        ref={(el) => {
+                            // Hook to sync start/stop logic?
+                            if (el && !isRunning.current) {
+                                // el.play(); // AutoPlay attribute does this
+                                // Sync isRunning state
+                            }
+                        }}
+                        onPlay={() => {
+                            isRunning.current = true;
+                            loop();
+                        }}
+                        onPause={() => {
+                            isRunning.current = false;
+                            if (requestRef.current) cancelAnimationFrame(requestRef.current);
+                        }}
+                    />
+                ) : (
+                    <YouTube
+                        videoId={youtubeId}
+                        opts={{
+                            width: '100%',
+                            height: '100%',
+                            playerVars: {
+                                autoplay: 0,
+                            },
+                        }}
+                        className="w-full h-full absolute top-0 left-0"
+                        onReady={onPlayerReady}
+                        onStateChange={onPlayerStateChange}
+                    />
+                )}
 
                 {/* Overlay Canvas for Red Skeleton */}
                 <canvas

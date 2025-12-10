@@ -1,0 +1,5 @@
+mediapipe
+opencv-python
+yt-dlp
+numpy
+ffmpeg-python

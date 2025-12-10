@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import DanceCanvas from '../components/DanceCanvas';
 import ScoreBoard from '../components/ScoreBoard';
 
@@ -26,10 +26,68 @@ export default function Home() {
     return id;
   };
 
+  const [processingStatus, setProcessingStatus] = useState<string | null>(null);
+  const [processedVideoUrl, setProcessedVideoUrl] = useState<string | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startProcessing = async (id: string, fullUrl: string) => {
+    setProcessingStatus('Starting processing...');
+    setProcessedVideoUrl(null);
+    setYoutubeId(null); // Clear previous session if any
+
+    try {
+      // Trigger processing
+      const res = await fetch('/api/process-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId: id, url: fullUrl }),
+      });
+      const data = await res.json();
+
+      if (data.status === 'completed') {
+        setProcessingStatus(null);
+        setProcessedVideoUrl(data.videoUrl);
+        setYoutubeId(id);
+        return;
+      }
+
+      setProcessingStatus('Processing Dance Routine... This may take a minute.');
+
+      // Poll for status
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+
+      pollIntervalRef.current = setInterval(async () => {
+        try {
+          const pollRes = await fetch(`/api/process-video?videoId=${id}`);
+          const pollData = await pollRes.json();
+
+          if (pollData.status === 'completed') {
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            setProcessingStatus(null);
+            setProcessedVideoUrl(pollData.videoUrl);
+            setYoutubeId(id);
+          } else if (pollData.status === 'not_found' || pollData.error) {
+            // Handle error or restart? 
+            // For now keep polling or timeout?
+            // If not found after we started, maybe it failed.
+            // But 'not_found' is also returned if lock doesn't exist yet but it should have 'started'.
+          }
+        } catch (e) {
+          console.error("Polling error", e);
+        }
+      }, 3000);
+
+    } catch (e) {
+      console.error(e);
+      alert("Error starting video processing");
+      setProcessingStatus(null);
+    }
+  };
+
   const handleStart = () => {
     const id = parseVideoId(url);
     if (id) {
-      setYoutubeId(id);
+      startProcessing(id, url);
     } else {
       alert("Invalid YouTube URL");
     }
@@ -38,8 +96,17 @@ export default function Home() {
   const handlePreset = (presetUrl: string) => {
     setUrl(presetUrl);
     const id = parseVideoId(presetUrl);
-    if (id) setYoutubeId(id);
+    if (id) {
+      startProcessing(id, presetUrl);
+    }
   };
+
+  // Cleanup polling on unmount
+  React.useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
 
   const handleScoreUpdate = (points: number, newFeedback: string) => {
     setScore(prev => prev + points);
@@ -163,7 +230,14 @@ export default function Home() {
               <ScoreBoard score={score} feedback={feedback} />
             </div>
 
-            <DanceCanvas youtubeId={youtubeId} onScoreUpdate={handleScoreUpdate} />
+            {processingStatus && (
+              <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm text-white animate-in catch-fade-in">
+                <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500 mb-4"></div>
+                <p className="text-xl font-bold animate-pulse">{processingStatus}</p>
+              </div>
+            )}
+
+            <DanceCanvas youtubeId={youtubeId} processedVideoUrl={processedVideoUrl} onScoreUpdate={handleScoreUpdate} />
 
             <button
               onClick={() => { setYoutubeId(null); setScore(0); }}
