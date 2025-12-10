@@ -113,6 +113,11 @@ export default function Home() {
     setFeedback(newFeedback);
   };
 
+  const handleScoreReset = () => {
+    setScore(0);
+    setFeedback('Ready');
+  };
+
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-purple-500 selection:text-white">
       {/* Navbar / Header */}
@@ -237,7 +242,7 @@ export default function Home() {
               </div>
             )}
 
-            <DanceCanvas youtubeId={youtubeId} processedVideoUrl={processedVideoUrl} onScoreUpdate={handleScoreUpdate} />
+            <DanceCanvas youtubeId={youtubeId} processedVideoUrl={processedVideoUrl} onScoreUpdate={handleScoreUpdate} onScoreReset={handleScoreReset} />
 
             <button
               onClick={() => { setYoutubeId(null); setScore(0); }}

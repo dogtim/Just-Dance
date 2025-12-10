@@ -13,6 +13,20 @@ export interface ActionMeshCheckpoint {
 }
 
 /**
+ * Calculate angle between two vectors
+ */
+function calculateAngle(v1: { x: number; y: number; z: number }, v2: { x: number; y: number; z: number }): number {
+    const dotProduct = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+    const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y + v1.z * v1.z);
+    const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y + v2.z * v2.z);
+
+    if (mag1 === 0 || mag2 === 0) return 0;
+
+    const cosAngle = dotProduct / (mag1 * mag2);
+    return Math.acos(Math.max(-1, Math.min(1, cosAngle))) * (180 / Math.PI);
+}
+
+/**
  * Calculate similarity between two sets of pose landmarks
  * @param userLandmarks - User's current pose landmarks
  * @param targetLandmarks - Target pose landmarks from action mesh
@@ -26,16 +40,25 @@ export function calculatePoseSimilarity(
         return 0;
     }
 
-    // Important joint indices (weighted more heavily)
-    const importantJoints = [
-        11, 12, // shoulders
-        23, 24, // hips
-        13, 14, // elbows
-        25, 26, // knees
+    // Define important angle pairs (joint, parent1, parent2)
+    const anglePairs = [
+        // Left arm angles
+        { joint: 13, parent1: 11, parent2: 15, name: 'left elbow', weight: 2.5 },      // left elbow
+        { joint: 11, parent1: 13, parent2: 23, name: 'left shoulder', weight: 2.0 },   // left shoulder
+        // Right arm angles
+        { joint: 14, parent1: 12, parent2: 16, name: 'right elbow', weight: 2.5 },     // right elbow
+        { joint: 12, parent1: 14, parent2: 24, name: 'right shoulder', weight: 2.0 },  // right shoulder
+        // Left leg angles
+        { joint: 25, parent1: 23, parent2: 27, name: 'left knee', weight: 2.5 },       // left knee
+        { joint: 23, parent1: 25, parent2: 11, name: 'left hip', weight: 2.0 },        // left hip
+        // Right leg angles
+        { joint: 26, parent1: 24, parent2: 28, name: 'right knee', weight: 2.5 },      // right knee
+        { joint: 24, parent1: 26, parent2: 12, name: 'right hip', weight: 2.0 },       // right hip
     ];
 
+    // Position-based similarity
     let totalDistance = 0;
-    let totalWeight = 0;
+    let totalDistanceWeight = 0;
 
     for (let i = 0; i < userLandmarks.length; i++) {
         const user = userLandmarks[i];
@@ -53,24 +76,73 @@ export function calculatePoseSimilarity(
             Math.pow(user.z - target.z, 2)
         );
 
-        // Weight important joints more heavily
-        const weight = importantJoints.includes(i) ? 2.0 : 1.0;
-        totalDistance += distance * weight;
-        totalWeight += weight;
+        totalDistance += distance;
+        totalDistanceWeight += 1;
     }
 
-    if (totalWeight === 0) {
-        return 0;
+    const avgDistance = totalDistanceWeight > 0 ? totalDistance / totalDistanceWeight : 1;
+
+    // More strict distance threshold - only distances below 0.15 get high scores
+    const distanceSimilarity = Math.max(0, Math.min(100, (1 - avgDistance / 0.15) * 100));
+
+    // Angle-based similarity
+    let totalAngleDiff = 0;
+    let totalAngleWeight = 0;
+
+    for (const pair of anglePairs) {
+        const { joint, parent1, parent2, weight } = pair;
+
+        // Check visibility
+        if (userLandmarks[joint].visibility < 0.5 ||
+            userLandmarks[parent1].visibility < 0.5 ||
+            userLandmarks[parent2].visibility < 0.5 ||
+            targetLandmarks[joint].visibility < 0.5 ||
+            targetLandmarks[parent1].visibility < 0.5 ||
+            targetLandmarks[parent2].visibility < 0.5) {
+            continue;
+        }
+
+        // Calculate vectors for user pose
+        const userVec1 = {
+            x: userLandmarks[parent1].x - userLandmarks[joint].x,
+            y: userLandmarks[parent1].y - userLandmarks[joint].y,
+            z: userLandmarks[parent1].z - userLandmarks[joint].z,
+        };
+        const userVec2 = {
+            x: userLandmarks[parent2].x - userLandmarks[joint].x,
+            y: userLandmarks[parent2].y - userLandmarks[joint].y,
+            z: userLandmarks[parent2].z - userLandmarks[joint].z,
+        };
+
+        // Calculate vectors for target pose
+        const targetVec1 = {
+            x: targetLandmarks[parent1].x - targetLandmarks[joint].x,
+            y: targetLandmarks[parent1].y - targetLandmarks[joint].y,
+            z: targetLandmarks[parent1].z - targetLandmarks[joint].z,
+        };
+        const targetVec2 = {
+            x: targetLandmarks[parent2].x - targetLandmarks[joint].x,
+            y: targetLandmarks[parent2].y - targetLandmarks[joint].y,
+            z: targetLandmarks[parent2].z - targetLandmarks[joint].z,
+        };
+
+        const userAngle = calculateAngle(userVec1, userVec2);
+        const targetAngle = calculateAngle(targetVec1, targetVec2);
+
+        const angleDiff = Math.abs(userAngle - targetAngle);
+        totalAngleDiff += angleDiff * weight;
+        totalAngleWeight += weight;
     }
 
-    const avgDistance = totalDistance / totalWeight;
+    const avgAngleDiff = totalAngleWeight > 0 ? totalAngleDiff / totalAngleWeight : 180;
 
-    // Convert distance to similarity (lower distance = higher similarity)
-    // Typical distance range is 0 to ~1.5 for full body mismatch
-    // We'll map 0 distance to 100% and 0.3+ distance to 0%
-    const similarity = Math.max(0, Math.min(100, (1 - avgDistance / 0.3) * 100));
+    // Angle difference to similarity - 0 degrees = 100%, 30+ degrees = 0%
+    const angleSimilarity = Math.max(0, Math.min(100, (1 - avgAngleDiff / 30) * 100));
 
-    return similarity;
+    // Combine both metrics (60% angle, 40% distance)
+    const finalSimilarity = angleSimilarity * 0.6 + distanceSimilarity * 0.4;
+
+    return finalSimilarity;
 }
 
 /**
@@ -79,14 +151,16 @@ export function calculatePoseSimilarity(
  * @returns Feedback text and points awarded
  */
 export function getScoreFeedback(similarity: number): { feedback: string; points: number } {
-    if (similarity >= 90) {
+    if (similarity >= 95) {
         return { feedback: 'Perfect! 🔥', points: 100 };
+    } else if (similarity >= 85) {
+        return { feedback: 'Great! ⭐', points: 60 };
     } else if (similarity >= 70) {
-        return { feedback: 'Great! ⭐', points: 50 };
+        return { feedback: 'Good! 👍', points: 30 };
     } else if (similarity >= 50) {
-        return { feedback: 'Good! 👍', points: 25 };
+        return { feedback: 'Almost! 💪', points: 10 };
     } else {
-        return { feedback: 'Keep trying!', points: 0 };
+        return { feedback: 'Keep trying! 💃', points: 0 };
     }
 }
 

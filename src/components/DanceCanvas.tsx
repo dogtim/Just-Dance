@@ -17,10 +17,11 @@ import {
 interface DanceCanvasProps {
     youtubeId: string;
     onScoreUpdate: (points: number, feedback: string) => void;
+    onScoreReset: () => void;
     processedVideoUrl: string | null;
 }
 
-const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, processedVideoUrl }) => {
+const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onScoreReset, processedVideoUrl }) => {
     const webcamRef = useRef<Webcam>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [detector, setDetector] = useState<IPoseDetector | null>(null);
@@ -40,6 +41,7 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, pro
     const [actionMesh, setActionMesh] = useState<ActionMeshCheckpoint[] | null>(null);
     const processedVideoRef = useRef<HTMLVideoElement>(null);
     const lastScoredTimeRef = useRef<number>(0);
+    const [isVideoPlaying, setIsVideoPlaying] = useState(false);
 
     const { detectionModel } = useSettings();
 
@@ -246,23 +248,58 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, pro
             {/* Left: YouTube Player */}
             <div className="relative w-full h-full bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl">
                 {processedVideoUrl ? (
-                    <video
-                        ref={processedVideoRef}
-                        src={processedVideoUrl}
-                        className="w-full h-full absolute top-0 left-0 object-cover"
-                        controls={false}
-                        autoPlay
-                        loop
-                        playsInline
-                        onPlay={() => {
-                            isRunning.current = true;
-                            loop();
-                        }}
-                        onPause={() => {
-                            isRunning.current = false;
-                            if (requestRef.current) cancelAnimationFrame(requestRef.current);
-                        }}
-                    />
+                    <>
+                        <video
+                            ref={processedVideoRef}
+                            src={processedVideoUrl}
+                            className="w-full h-full absolute top-0 left-0 object-cover"
+                            controls={false}
+                            autoPlay
+                            playsInline
+                            onPlay={() => {
+                                isRunning.current = true;
+                                setIsVideoPlaying(true);
+                                loop();
+                            }}
+                            onPause={() => {
+                                isRunning.current = false;
+                                setIsVideoPlaying(false);
+                                if (requestRef.current) cancelAnimationFrame(requestRef.current);
+                            }}
+                            onEnded={() => {
+                                isRunning.current = false;
+                                setIsVideoPlaying(false);
+                                if (requestRef.current) cancelAnimationFrame(requestRef.current);
+                                // Reset score when video playback completes
+                                onScoreReset();
+                            }}
+                        />
+
+                        {/* Play/Pause Button Overlay */}
+                        <button
+                            onClick={() => {
+                                if (processedVideoRef.current) {
+                                    if (isVideoPlaying) {
+                                        processedVideoRef.current.pause();
+                                    } else {
+                                        processedVideoRef.current.play();
+                                    }
+                                }
+                            }}
+                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 bg-black/50 hover:bg-black/70 rounded-full p-4 transition-all duration-200 hover:scale-110"
+                            title={isVideoPlaying ? "Pause" : "Play"}
+                        >
+                            {isVideoPlaying ? (
+                                <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+                                </svg>
+                            ) : (
+                                <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M8 5v14l11-7z" />
+                                </svg>
+                            )}
+                        </button>
+                    </>
                 ) : (
                     <YouTube
                         videoId={youtubeId}
