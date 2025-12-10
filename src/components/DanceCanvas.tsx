@@ -6,6 +6,13 @@ import YouTube, { YouTubeProps, YouTubePlayer } from 'react-youtube';
 import { createDetector, drawPose, IPoseDetector } from '../utils/poseDetector';
 import { Results } from '@mediapipe/pose';
 import { useSettings } from '../context/SettingsContext';
+import {
+    ActionMeshCheckpoint,
+    calculatePoseSimilarity,
+    getScoreFeedback,
+    findNearestCheckpoint,
+    resultsToLandmarks
+} from '../utils/poseComparison';
 
 interface DanceCanvasProps {
     youtubeId: string;
@@ -29,7 +36,32 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, pro
     const screenVideoRef = useRef<HTMLVideoElement>(null);
     const isAnalyzing = useRef<boolean>(false);
 
+    // Action Mesh (Target Pose) State
+    const [actionMesh, setActionMesh] = useState<ActionMeshCheckpoint[] | null>(null);
+    const processedVideoRef = useRef<HTMLVideoElement>(null);
+    const lastScoredTimeRef = useRef<number>(0);
+
     const { detectionModel } = useSettings();
+
+    // Load Action Mesh when processedVideoUrl changes
+    useEffect(() => {
+        if (!processedVideoUrl || !youtubeId) {
+            setActionMesh(null);
+            return;
+        }
+
+        const meshUrl = `/processed/${youtubeId}_action_mesh.json`;
+        fetch(meshUrl)
+            .then(res => res.json())
+            .then(data => {
+                console.log(`Loaded ${data.length} action mesh checkpoints`);
+                setActionMesh(data);
+            })
+            .catch(err => {
+                console.error('Failed to load action mesh:', err);
+                setActionMesh(null);
+            });
+    }, [processedVideoUrl, youtubeId]);
 
     // Initialize Detector
     useEffect(() => {
@@ -40,20 +72,32 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, pro
                 if (!canvasRef.current) return;
                 const ctx = canvasRef.current.getContext('2d');
                 if (ctx) {
-                    const color = detectionModel === 'Meta 3D Body' ? '#00FFFF' : '#00FF00'; // Cyan for Meta, Green for MP
+                    const color = detectionModel === 'Meta 3D Body' ? '#00FFFF' : '#00FF00';
                     drawPose(ctx, results, color);
-                    // Very simple scoring logic for now: PRESENCE check
-                    // If we detect a pose, give points for "dancing"
-                    if (results.poseLandmarks && results.poseLandmarks.length > 0) {
-                        // Calculate movement or verify sync in future
-                        // For now, minimal "Good" feedback if visible
-                        const visibilitySum = results.poseLandmarks.reduce((acc, curr) => acc + (curr.visibility || 0), 0);
-                        const avgVisibility = visibilitySum / results.poseLandmarks.length;
 
-                        if (avgVisibility > 0.5) {
-                            // Determine feedback based on random for demo 'feeling' or actual comparison later
-                            // Simulating 'detection' as scoring event
-                            // In real app, we compare with reference
+                    // NEW: Pose comparison and scoring
+                    if (actionMesh && processedVideoUrl && results.poseLandmarks) {
+                        const currentTime = processedVideoRef.current?.currentTime || 0;
+
+                        // Only score once per checkpoint (avoid duplicate scoring)
+                        const timeSinceLastScore = currentTime - lastScoredTimeRef.current;
+                        if (timeSinceLastScore < 0.4) {
+                            return; // Skip if we scored recently
+                        }
+
+                        const checkpoint = findNearestCheckpoint(actionMesh, currentTime);
+                        if (checkpoint) {
+                            const userLandmarks = resultsToLandmarks(results);
+                            if (userLandmarks) {
+                                const similarity = calculatePoseSimilarity(userLandmarks, checkpoint.landmarks);
+                                const { feedback, points } = getScoreFeedback(similarity);
+
+                                if (points > 0) {
+                                    console.log(`Time: ${currentTime.toFixed(1)}s, Similarity: ${similarity.toFixed(1)}%, ${feedback}`);
+                                    onScoreUpdate(points, feedback);
+                                    lastScoredTimeRef.current = currentTime;
+                                }
+                            }
                         }
                     }
                 }
@@ -203,19 +247,13 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, pro
             <div className="relative w-full h-full bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl">
                 {processedVideoUrl ? (
                     <video
+                        ref={processedVideoRef}
                         src={processedVideoUrl}
                         className="w-full h-full absolute top-0 left-0 object-cover"
-                        controls={false} // Custom controls or sync with game loop? For now allow autoplay loop
+                        controls={false}
                         autoPlay
                         loop
                         playsInline
-                        ref={(el) => {
-                            // Hook to sync start/stop logic?
-                            if (el && !isRunning.current) {
-                                // el.play(); // AutoPlay attribute does this
-                                // Sync isRunning state
-                            }
-                        }}
                         onPlay={() => {
                             isRunning.current = true;
                             loop();

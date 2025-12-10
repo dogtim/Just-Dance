@@ -7,6 +7,7 @@ import sys
 import os
 import subprocess
 import argparse
+import json
 
 def download_video(url, output_path):
     ydl_opts = {
@@ -17,7 +18,7 @@ def download_video(url, output_path):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
 
-def process_video(input_path, output_path):
+def process_video(input_path, output_path, video_id):
     mp_pose = mp.solutions.pose
     pose = mp_pose.Pose(
         static_image_mode=False,
@@ -36,6 +37,11 @@ def process_video(input_path, output_path):
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
+    
+    # For mesh data collection
+    action_mesh_data = []
+    checkpoint_interval = 0.5  # seconds
+    next_checkpoint_time = checkpoint_interval
 
     # FFmpeg command to combine processed video with original audio
     # Reads raw video from stdin
@@ -82,6 +88,25 @@ def process_video(input_path, output_path):
         image.flags.writeable = False
 
         results = pose.process(image)
+        
+        # Calculate current time
+        current_time = frame_count / fps
+        
+        # Save mesh data at checkpoints (every 0.5s)
+        if current_time >= next_checkpoint_time and results.pose_landmarks:
+            landmarks_data = []
+            for lm in results.pose_landmarks.landmark:
+                landmarks_data.append({
+                    'x': lm.x,
+                    'y': lm.y,
+                    'z': lm.z,
+                    'visibility': lm.visibility
+                })
+            action_mesh_data.append({
+                'time': round(next_checkpoint_time, 1),
+                'landmarks': landmarks_data
+            })
+            next_checkpoint_time += checkpoint_interval
 
         # Create black background
         black_frame = np.zeros((height, width, 3), dtype=np.uint8)
@@ -107,6 +132,13 @@ def process_video(input_path, output_path):
     process.stdin.close()
     process.wait()
     pose.close()
+    
+    # Save action mesh data to JSON
+    mesh_json_path = f'public/processed/{video_id}_action_mesh.json'
+    with open(mesh_json_path, 'w') as f:
+        json.dump(action_mesh_data, f, indent=2)
+    print(f"Saved {len(action_mesh_data)} pose checkpoints to {mesh_json_path}")
+    
     print("Processing complete.")
 
 def main():
@@ -136,7 +168,7 @@ def main():
 
     print("Starting processing...")
     try:
-        process_video(input_video_path, output_video_path)
+        process_video(input_video_path, output_video_path, args.video_id)
     except Exception as e:
         print(f"Processing failed: {e}")
     finally:
