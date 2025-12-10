@@ -81,7 +81,8 @@ export class PoseDetector {
 }
 
 // Drawing Utilities can be exported here too
-export const drawPose = (ctx: CanvasRenderingContext2D, results: Results) => {
+// Drawing Utilities can be exported here too
+export const drawPose = (ctx: CanvasRenderingContext2D, results: Results, color: string = '#00FF00') => {
     const width = ctx.canvas.width;
     const height = ctx.canvas.height;
 
@@ -89,7 +90,7 @@ export const drawPose = (ctx: CanvasRenderingContext2D, results: Results) => {
     ctx.clearRect(0, 0, width, height);
 
     if (results.poseLandmarks) {
-        ctx.strokeStyle = 'white';
+        ctx.strokeStyle = color;
         ctx.lineWidth = 3;
 
         // Draw connections
@@ -106,7 +107,7 @@ export const drawPose = (ctx: CanvasRenderingContext2D, results: Results) => {
         }
 
         // Draw Landmarks
-        ctx.fillStyle = '#00FF00'; // Green dots
+        ctx.fillStyle = color;
         for (const lm of results.poseLandmarks) {
             if ((lm.visibility || 0) > 0.5) {
                 ctx.beginPath();

@@ -129,6 +129,22 @@ export default function Home() {
                     Play
                   </div>
                 </button>
+
+                <button
+                  onClick={() => handlePreset('https://www.youtube.com/shorts/Kp93BPSC70I')}
+                  className="flex items-center gap-4 p-4 bg-gray-800/50 hover:bg-gray-800 border border-gray-700/50 hover:border-yellow-500/50 rounded-xl transition-all group text-left"
+                >
+                  <div className="w-10 h-10 rounded-full bg-yellow-500/10 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                    👟
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-gray-200 group-hover:text-yellow-400 transition-colors">HipHop Dancing Video</div>
+                    <div className="text-xs text-gray-500">YouTube Shorts Format</div>
+                  </div>
+                  <div className="text-gray-600 group-hover:text-yellow-400 transition-colors">
+                    Play
+                  </div>
+                </button>
               </div>
             </div>
           </div>
