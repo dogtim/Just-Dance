@@ -33,8 +33,7 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
     const [cameraError, setCameraError] = useState<string | null>(null);
 
     // Video Analysis State
-    const videoCanvasRef = useRef<HTMLCanvasElement>(null);
-    const [videoDetector, setVideoDetector] = useState<IPoseDetector | null>(null);
+
 
     // Action Mesh (Target Pose) State
     const [actionMesh, setActionMesh] = useState<ActionMeshCheckpoint[] | null>(null);
@@ -51,7 +50,7 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
     const [isVideoPlaying, setIsVideoPlaying] = useState(false);
     const [isPersonDetected, setIsPersonDetected] = useState(false);
     const [currentCheckpoint, setCurrentCheckpoint] = useState<ActionMeshCheckpoint | null>(null);
-    const currentCheckpointRef = useRef<ActionMeshCheckpoint | null>(null); // Ref for closure access
+
     const [currentUserLandmarks, setCurrentUserLandmarks] = useState<Landmark[] | null>(null);
 
     // Drag state for landmark panel
@@ -123,7 +122,7 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
                         const checkpoint = findNearestCheckpoint(actionMeshRef.current, currentTime);
                         if (checkpoint) {
                             setCurrentCheckpoint(checkpoint); // Store for visualization
-                            currentCheckpointRef.current = checkpoint; // Also store in ref for closure access
+
 
                             const userLandmarks = resultsToLandmarks(results);
                             if (userLandmarks) {
@@ -166,36 +165,16 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
             });
             setDetector(det);
         };
-        const initVideoDetector = async () => {
-            const det = createDetector(detectionModel);
-            det.onResults((results) => {
-                if (!videoCanvasRef.current) return;
-                const ctx = videoCanvasRef.current.getContext('2d');
-                if (ctx) {
-                    const color = detectionModel === 'Meta 3D Body' ? '#0088FF' : 'red'; // Blue-ish for Meta Video, Red for MP Video
-                    drawPose(ctx, results, color);
-
-                    // Also draw the reference checkpoint pose (if available) in a different color
-                    // Use ref to get latest checkpoint value (avoids closure issues)
-                    if (currentCheckpointRef.current) {
-                        drawLandmarks(ctx, currentCheckpointRef.current.landmarks, '#FFFF00', false); // Yellow for reference pose
-                    }
-                }
-            });
-            setVideoDetector(det);
-        };
 
         initDetector();
-        initVideoDetector();
+
 
         return () => {
             // Cleanup if method existed
             if (detector) {
                 detector.close();
             }
-            if (videoDetector) {
-                videoDetector.close();
-            }
+
         };
     }, [detectionModel]); // Removed currentCheckpoint from dependencies
 
@@ -223,7 +202,8 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
         }
 
         requestRef.current = requestAnimationFrame(loop);
-    }, [detector, videoDetector, onScoreUpdate]);
+    }, [detector, onScoreUpdate]);
+
 
     useEffect(() => {
         if (isRunning.current && detector) {
@@ -408,28 +388,10 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
                     />
                 )}
 
-                {/* Overlay Canvas for Red Skeleton */}
-                <canvas
-                    ref={videoCanvasRef}
-                    className="absolute top-0 left-0 w-full h-full pointer-events-none z-20"
-                    width={640}
-                    height={480}
-                />
 
 
-                {/* Color Legend for Pose Comparison */}
-                {processedVideoUrl && currentCheckpoint && (
-                    <div className="absolute bottom-4 left-4 z-30 bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2.5 text-sm space-y-2 shadow-lg border border-gray-700">
-                        <div className="flex items-center gap-3">
-                            <div className="w-4 h-4 rounded-full shadow-yellow-500/50 shadow-lg" style={{ backgroundColor: '#FFFF00' }}></div>
-                            <span className="text-white font-semibold">Reference (Target)</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <div className="w-4 h-4 rounded-full bg-red-600 shadow-red-500/50 shadow-lg"></div>
-                            <span className="text-white font-semibold">Video Pose</span>
-                        </div>
-                    </div>
-                )}
+
+
             </div>
 
             {/* Right: User Camera & Skeleton */}
