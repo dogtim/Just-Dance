@@ -120,29 +120,34 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-purple-500 selection:text-white">
-      {/* Navbar / Header */}
-      <header className="p-6 flex justify-between items-center border-b border-gray-800 bg-gray-900/50 backdrop-blur-lg sticky top-0 z-50">
-        <div className="flex items-center gap-2">
-          <span className="text-4xl">🕺</span>
-          <h1 className="text-3xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 hover:scale-105 transition-transform cursor-default">
-            JUST DANCE AI
-          </h1>
+      {/* Navbar / Header - Only show when NOT playing */}
+      {!youtubeId && (
+        <header className="p-6 flex justify-between items-center border-b border-gray-800 bg-gray-900/50 backdrop-blur-lg sticky top-0 z-50">
+          <div className="flex items-center gap-2">
+            <span className="text-4xl">🕺</span>
+            <h1 className="text-3xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 hover:scale-105 transition-transform cursor-default">
+              JUST DANCE AI
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <a href="/setting" className="p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition-colors border border-gray-700 text-xl" title="Settings">
+              ⚙️
+            </a>
+          </div>
+        </header>
+      )}
+
+      {/* Floating ScoreBoard - Only show when playing */}
+      {youtubeId && (
+        <div className="absolute top-6 right-6 z-50 pointer-events-none">
+          <div className="pointer-events-auto">
+            <ScoreBoard score={score} feedback={feedback} />
+          </div>
         </div>
+      )}
 
-        <div className="flex items-center gap-4">
-          {youtubeId && (
-            <div className="hidden md:block">
-              <ScoreBoard score={score} feedback={feedback} />
-            </div>
-          )}
-
-          <a href="/setting" className="p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition-colors border border-gray-700 text-xl" title="Settings">
-            ⚙️
-          </a>
-        </div>
-      </header>
-
-      <main className="container mx-auto p-4 md:p-8 flex flex-col items-center gap-8">
+      <main className={`flex flex-col items-center gap-8 ${youtubeId ? 'w-full h-screen p-4 overflow-hidden' : 'container mx-auto p-4 md:p-8'}`}>
 
         {/* Setup / Input Section */}
         {!youtubeId && (
@@ -230,10 +235,7 @@ export default function Home() {
 
         {/* Game Active Section */}
         {youtubeId && (
-          <div className="w-full h-full flex flex-col gap-6 animate-in zoom-in-95 duration-500">
-            <div className="flex justify-between items-center md:hidden">
-              <ScoreBoard score={score} feedback={feedback} />
-            </div>
+          <div className="w-full h-full flex flex-col gap-4 animate-in zoom-in-95 duration-500 relative">
 
             {processingStatus && (
               <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm text-white animate-in catch-fade-in">
@@ -253,7 +255,7 @@ export default function Home() {
 
             <button
               onClick={() => { setYoutubeId(null); setScore(0); }}
-              className="self-center px-6 py-2 text-gray-400 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors"
+              className="absolute bottom-6 left-1/2 -translate-x-1/2 px-8 py-3 bg-red-600/20 hover:bg-red-600/80 text-white backdrop-blur-md rounded-full transition-all border border-red-500/50 hover:scale-105 shadow-xl z-50 font-semibold"
             >
               Stop Session
             </button>

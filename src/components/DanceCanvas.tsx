@@ -265,7 +265,7 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
     }, [isDragging, handleMouseMove, handleMouseUp]);
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full h-[600px] relative">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full h-full relative">
             {/* Floating Debug Info Panel */}
             {processedVideoUrl && (
                 <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50 bg-black/70 backdrop-blur-md rounded-lg border border-yellow-600/30 p-2.5 shadow-2xl max-w-md">
@@ -323,7 +323,7 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
                         <video
                             ref={processedVideoRef}
                             src={processedVideoUrl}
-                            className="w-full h-full absolute top-0 left-0 object-cover"
+                            className="w-full h-full absolute top-0 left-0 object-contain"
                             controls={false}
                             autoPlay
                             playsInline
