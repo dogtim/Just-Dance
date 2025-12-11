@@ -112,7 +112,11 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
 
                         // Only score once per checkpoint (avoid duplicate scoring)
                         const timeSinceLastScore = currentTime - lastScoredTimeRef.current;
-                        if (timeSinceLastScore < 0.4) {
+
+                        // FIX: Detect if video looped or seeked backwards (negative diff)
+                        // If time diff is negative, it means we went back in time (replay), so we SHOULD score.
+                        // We only skip if we are moving forward linearly and it hasn't been long enough.
+                        if (timeSinceLastScore >= 0 && timeSinceLastScore < 0.4) {
                             return; // Skip if we scored recently
                         }
 
@@ -359,6 +363,7 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
                                 if (requestRef.current) cancelAnimationFrame(requestRef.current);
                                 // Reset score when video playback completes
                                 onScoreReset();
+                                lastScoredTimeRef.current = 0;
                             }}
                         />
 
