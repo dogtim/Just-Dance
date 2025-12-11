@@ -23,7 +23,6 @@ interface DanceCanvasProps {
 }
 
 const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onScoreReset, processedVideoUrl }) => {
-    console.log('[DANCE CANVAS] Component rendered with props:', { youtubeId, processedVideoUrl });
     const webcamRef = useRef<Webcam>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [detector, setDetector] = useState<IPoseDetector | null>(null);
@@ -107,10 +106,8 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
                     const color = detectionModel === 'Meta 3D Body' ? '#00FFFF' : '#00FF00';
                     drawPose(ctx, results, color);
 
-                    console.log(`[DEBUG] actionMesh (ref): ${actionMeshRef.current}`);
                     // NEW: Pose comparison and scoring (use ref to get latest value)
                     if (actionMeshRef.current && processedVideoUrl && results.poseLandmarks) {
-                        console.log(`[DEBUG] actionMesh inside`);
                         const currentTime = processedVideoRef.current?.currentTime || 0;
 
                         // Only score once per checkpoint (avoid duplicate scoring)
@@ -134,10 +131,8 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
                                 const visibleCount = keyIndices.filter(i => userLandmarks[i]?.visibility > 0.5).length;
                                 const visibilityRatio = visibleCount / keyIndices.length;
 
-                                console.log(`[DEBUG] Time: ${currentTime.toFixed(1)}s, Visible landmarks: ${visibleCount}/${keyIndices.length} (${(visibilityRatio * 100).toFixed(0)}%)`);
-
                                 // Require at least 70% of key landmarks to be visible
-                                if (visibilityRatio < 0.7) {
+                                if (visibilityRatio < 0.2) {
                                     setIsPersonDetected(false); // FIX: Set to FALSE when not enough landmarks
                                     console.log(`[SKIP] Not enough visible landmarks (need 70%, have ${(visibilityRatio * 100).toFixed(0)}%)`);
                                     return; // Don't score if person is not clearly detected
