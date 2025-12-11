@@ -35,8 +35,6 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
     // Video Analysis State
     const videoCanvasRef = useRef<HTMLCanvasElement>(null);
     const [videoDetector, setVideoDetector] = useState<IPoseDetector | null>(null);
-    const screenVideoRef = useRef<HTMLVideoElement>(null);
-    const isAnalyzing = useRef<boolean>(false);
 
     // Action Mesh (Target Pose) State
     const [actionMesh, setActionMesh] = useState<ActionMeshCheckpoint[] | null>(null);
@@ -196,42 +194,6 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
             // }
         }
 
-        // Analyze Screen Video if active
-        if (isAnalyzing.current && screenVideoRef.current && screenVideoRef.current.readyState === 4 && videoDetector && videoCanvasRef.current) {
-            const video = screenVideoRef.current;
-            const canvasEl = videoCanvasRef.current;
-
-            // Get DOM Position of the overlay canvas (which matches YouTube player)
-            const rect = canvasEl.getBoundingClientRect();
-
-            // Calculate scale between Screen Capture Native Resolution and Browser Window dimensions
-            // getDisplayMedia often returns retina resolution or native screen res, which differs from innerWidth
-            const scaleX = video.videoWidth / window.innerWidth;
-            const scaleY = video.videoHeight / window.innerHeight;
-
-            // Calculate precise crop coordinates
-            const cropX = rect.left * scaleX;
-            const cropY = rect.top * scaleY;
-            const cropW = rect.width * scaleX;
-            const cropH = rect.height * scaleY;
-
-            // Ensure we don't go out of bounds (can happen with borders/browser UI)
-            if (cropW > 0 && cropH > 0) {
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = cropW;
-                tempCanvas.height = cropH;
-                const ctx = tempCanvas.getContext('2d');
-                if (ctx) {
-                    ctx.drawImage(
-                        video,
-                        cropX, cropY, cropW, cropH, // Source Crop
-                        0, 0, tempCanvas.width, tempCanvas.height // Destination
-                    );
-                    await videoDetector.send(tempCanvas);
-                }
-            }
-        }
-
         requestRef.current = requestAnimationFrame(loop);
     }, [detector, videoDetector, onScoreUpdate]);
 
@@ -257,23 +219,6 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
             isRunning.current = false;
             // Don't cancel immediately to keep analyzing potentially? No, sync with playback.
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
-        }
-    };
-
-    const startScreenShare = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getDisplayMedia({
-                video: true,
-                audio: false
-            });
-            if (screenVideoRef.current) {
-                screenVideoRef.current.srcObject = stream;
-                screenVideoRef.current.play();
-                isAnalyzing.current = true;
-            }
-        } catch (err) {
-            console.error("Error sharing screen:", err);
-            alert("Could not start screen share for analysis.");
         }
     };
 
@@ -408,14 +353,6 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
                     height={480}
                 />
 
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30">
-                    <button
-                        onClick={startScreenShare}
-                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs opacity-50 hover:opacity-100 transition-opacity"
-                    >
-                        Start Video Analysis
-                    </button>
-                </div>
 
                 {/* Color Legend for Pose Comparison */}
                 {processedVideoUrl && currentCheckpoint && (
@@ -521,8 +458,6 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
                 )}
             </div>
 
-            {/* Hidden Video for Screen Capture */}
-            <video ref={screenVideoRef} className="hidden" playsInline muted />
 
             {/* Landmark Data Comparison Panel */}
             {processedVideoUrl && currentCheckpoint && currentUserLandmarks && (
