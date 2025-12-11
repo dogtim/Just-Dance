@@ -16,13 +16,14 @@ import {
 } from '../utils/poseComparison';
 
 interface DanceCanvasProps {
-    youtubeId: string;
+    youtubeId: string | null;  // Allow null!
     onScoreUpdate: (points: number, feedback: string) => void;
     onScoreReset: () => void;
     processedVideoUrl: string | null;
 }
 
 const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onScoreReset, processedVideoUrl }) => {
+    console.log('[DANCE CANVAS] Component rendered with props:', { youtubeId, processedVideoUrl });
     const webcamRef = useRef<Webcam>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [detector, setDetector] = useState<IPoseDetector | null>(null);
@@ -38,6 +39,14 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
 
     // Action Mesh (Target Pose) State
     const [actionMesh, setActionMesh] = useState<ActionMeshCheckpoint[] | null>(null);
+    const actionMeshRef = useRef<ActionMeshCheckpoint[] | null>(null); // Ref for closure access
+
+    // Debug: Log when actionMesh changes
+    useEffect(() => {
+        console.log('[ACTION MESH STATE] Changed to:', actionMesh ? `${actionMesh.length} checkpoints` : 'null');
+        actionMeshRef.current = actionMesh; // Keep ref in sync
+    }, [actionMesh]);
+
     const processedVideoRef = useRef<HTMLVideoElement>(null);
     const lastScoredTimeRef = useRef<number>(0);
     const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -50,21 +59,34 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
 
     // Load Action Mesh when processedVideoUrl changes
     useEffect(() => {
+        console.log('[ACTION MESH] useEffect triggered', { processedVideoUrl, youtubeId });
+
         if (!processedVideoUrl || !youtubeId) {
-            setActionMesh(null);
+            console.log('[ACTION MESH] Skipping - missing processedVideoUrl or youtubeId');
+            //setActionMesh(null);
             return;
         }
 
         const meshUrl = `/processed/${youtubeId}_action_mesh.json`;
+        console.log('[ACTION MESH] Fetching from:', meshUrl);
+
         fetch(meshUrl)
-            .then(res => res.json())
+            .then(res => {
+                console.log('[ACTION MESH] Fetch response status:', res.status, res.statusText);
+                if (!res.ok) {
+                    throw new Error(`HTTP error! status: ${res.status}`);
+                }
+                return res.json();
+            })
             .then(data => {
-                console.log(`Loaded ${data.length} action mesh checkpoints`);
+                console.log('[ACTION MESH] Successfully loaded:', data);
+                console.log('[ACTION MESH] Checkpoints count:', data?.length);
                 setActionMesh(data);
             })
             .catch(err => {
-                console.error('Failed to load action mesh:', err);
-                setActionMesh(null);
+                console.error('[ACTION MESH] Failed to load action mesh:', err);
+                console.error('[ACTION MESH] Attempted URL:', meshUrl);
+                //setActionMesh(null);
             });
     }, [processedVideoUrl, youtubeId]);
 
@@ -80,8 +102,10 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
                     const color = detectionModel === 'Meta 3D Body' ? '#00FFFF' : '#00FF00';
                     drawPose(ctx, results, color);
 
-                    // NEW: Pose comparison and scoring
-                    if (actionMesh && processedVideoUrl && results.poseLandmarks) {
+                    console.log(`[DEBUG] actionMesh (ref): ${actionMeshRef.current}`);
+                    // NEW: Pose comparison and scoring (use ref to get latest value)
+                    if (actionMeshRef.current && processedVideoUrl && results.poseLandmarks) {
+                        console.log(`[DEBUG] actionMesh inside`);
                         const currentTime = processedVideoRef.current?.currentTime || 0;
 
                         // Only score once per checkpoint (avoid duplicate scoring)
@@ -90,7 +114,7 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
                             return; // Skip if we scored recently
                         }
 
-                        const checkpoint = findNearestCheckpoint(actionMesh, currentTime);
+                        const checkpoint = findNearestCheckpoint(actionMeshRef.current, currentTime);
                         if (checkpoint) {
                             setCurrentCheckpoint(checkpoint); // Store for visualization
                             currentCheckpointRef.current = checkpoint; // Also store in ref for closure access
@@ -331,7 +355,7 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
                     </>
                 ) : (
                     <YouTube
-                        videoId={youtubeId}
+                        videoId={youtubeId || undefined}
                         opts={{
                             width: '100%',
                             height: '100%',

@@ -46,8 +46,8 @@ export default function Home() {
 
       if (data.status === 'completed') {
         setProcessingStatus(null);
-        setProcessedVideoUrl(data.videoUrl);
-        setYoutubeId(id);
+        setYoutubeId(id); // Set youtubeId FIRST
+        setProcessedVideoUrl(data.videoUrl); // Then set processedVideoUrl
         return;
       }
 
@@ -64,8 +64,8 @@ export default function Home() {
           if (pollData.status === 'completed') {
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
             setProcessingStatus(null);
-            setProcessedVideoUrl(pollData.videoUrl);
-            setYoutubeId(id);
+            setYoutubeId(id); // Set youtubeId FIRST
+            setProcessedVideoUrl(pollData.videoUrl); // Then set processedVideoUrl
           } else if (pollData.status === 'not_found' || pollData.error) {
             // Handle error or restart? 
             // For now keep polling or timeout?
@@ -242,7 +242,14 @@ export default function Home() {
               </div>
             )}
 
-            <DanceCanvas youtubeId={youtubeId} processedVideoUrl={processedVideoUrl} onScoreUpdate={handleScoreUpdate} onScoreReset={handleScoreReset} />
+
+            <DanceCanvas
+              key={youtubeId}
+              youtubeId={youtubeId}
+              processedVideoUrl={processedVideoUrl}
+              onScoreUpdate={handleScoreUpdate}
+              onScoreReset={handleScoreReset}
+            />
 
             <button
               onClick={() => { setYoutubeId(null); setScore(0); }}
