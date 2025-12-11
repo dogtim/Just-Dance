@@ -55,6 +55,11 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
     const currentCheckpointRef = useRef<ActionMeshCheckpoint | null>(null); // Ref for closure access
     const [currentUserLandmarks, setCurrentUserLandmarks] = useState<Landmark[] | null>(null);
 
+    // Drag state for landmark panel
+    const [panelPosition, setPanelPosition] = useState({ x: 0, y: 112 }); // Default: top-28 (112px)
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartRef = useRef({ x: 0, y: 0 });
+
     const { detectionModel } = useSettings();
 
     // Load Action Mesh when processedVideoUrl changes
@@ -245,6 +250,40 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
         }
     };
+
+    // Drag handlers for landmark panel
+    const handleMouseDown = (e: React.MouseEvent) => {
+        setIsDragging(true);
+        dragStartRef.current = {
+            x: e.clientX - panelPosition.x,
+            y: e.clientY - panelPosition.y
+        };
+    };
+
+    const handleMouseMove = useCallback((e: MouseEvent) => {
+        if (isDragging) {
+            setPanelPosition({
+                x: e.clientX - dragStartRef.current.x,
+                y: e.clientY - dragStartRef.current.y
+            });
+        }
+    }, [isDragging]);
+
+    const handleMouseUp = useCallback(() => {
+        setIsDragging(false);
+    }, []);
+
+    // Add global mouse event listeners for dragging
+    useEffect(() => {
+        if (isDragging) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+            return () => {
+                window.removeEventListener('mousemove', handleMouseMove);
+                window.removeEventListener('mouseup', handleMouseUp);
+            };
+        }
+    }, [isDragging, handleMouseMove, handleMouseUp]);
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full h-[600px] relative">
@@ -483,14 +522,24 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
             </div>
 
 
-            {/* Landmark Data Comparison Panel */}
+            {/* Floating Debug Info Panel */}
             {processedVideoUrl && currentCheckpoint && currentUserLandmarks && (
-                <div className="mt-4 bg-gray-900/80 backdrop-blur-sm rounded-xl border border-gray-700 overflow-hidden">
-                    <div className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 border-b border-gray-700 px-4 py-2">
+                <div
+                    className="absolute z-50 bg-gray-900/90 backdrop-blur-md rounded-xl border border-purple-600/30 shadow-2xl max-w-2xl max-h-[500px] overflow-hidden opacity-50"
+                    style={{
+                        left: panelPosition.x === 0 ? '50%' : `${panelPosition.x}px`,
+                        top: `${panelPosition.y}px`,
+                        transform: panelPosition.x === 0 ? 'translateX(-50%)' : 'none'
+                    }}
+                >
+                    <div
+                        className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 border-b border-gray-700 px-4 py-2 cursor-move select-none"
+                        onMouseDown={handleMouseDown}
+                    >
                         <h3 className="text-white font-semibold text-sm">📊 Landmark Data Comparison</h3>
                     </div>
 
-                    <div className="p-4 max-h-96 overflow-y-auto">
+                    <div className="p-4 max-h-[440px] overflow-y-auto">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Reference Pose Data */}
                             <div className="space-y-2">
