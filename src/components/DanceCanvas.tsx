@@ -231,12 +231,19 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
     };
 
     // Drag handlers for landmark panel
+    const panelRef = useRef<HTMLDivElement>(null);
+
     const handleMouseDown = (e: React.MouseEvent) => {
-        setIsDragging(true);
-        dragStartRef.current = {
-            x: e.clientX - panelPosition.x,
-            y: e.clientY - panelPosition.y
-        };
+        if (panelRef.current) {
+            const rect = panelRef.current.getBoundingClientRect();
+            setIsDragging(true);
+            dragStartRef.current = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+            // Note: We don't need to setPanelPosition here, the first mouseMove will set it correctly
+            // to the absolute coordinates (e.g. rect.left) which matches the current visual position.
+        }
     };
 
     const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -487,6 +494,7 @@ const DanceCanvas: React.FC<DanceCanvasProps> = ({ youtubeId, onScoreUpdate, onS
             {/* Floating Debug Info Panel */}
             {processedVideoUrl && currentCheckpoint && currentUserLandmarks && (
                 <div
+                    ref={panelRef}
                     className="absolute z-50 bg-gray-900/90 backdrop-blur-md rounded-xl border border-purple-600/30 shadow-2xl max-w-2xl max-h-[500px] overflow-hidden opacity-50"
                     style={{
                         left: panelPosition.x === 0 ? '50%' : `${panelPosition.x}px`,
